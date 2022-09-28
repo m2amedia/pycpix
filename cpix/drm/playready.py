@@ -3,6 +3,7 @@ Functions for manipulating Playready DRM
 """
 from base64 import b16decode, b16encode, b64decode, b64encode
 import uuid
+import warnings
 from Crypto.Hash import SHA256
 from Crypto.Cipher import AES
 from construct.core import Prefixed, Struct, Const, Int8ub, Int24ub, Int32ub, \
@@ -94,40 +95,65 @@ def checksum(kid, cek):
     return b64encode(ciphertext[:8])
 
 
-def generate_wrmheader(keys, url, algorithm="AESCTR", use_checksum=True):
+def _convert_key_id_to_uuid(key_id):
+    if isinstance(key_id, str):
+        return uuid.UUID(key_id)
+    elif isinstance(key_id, bytes):
+        return uuid.UUID(str(key_id, "ASCII"))
+
+
+def generate_wrmheader(keys, url, algorithm="AESCTR", use_checksum=True,
+                       version="4.2.0.0"):
     """
     Generate Playready header 4.2 or 4.3 depending on the encryption algorithm
-    specified
+    or generate a 4.0 header if specified
     """
     if algorithm not in ["AESCTR", "AESCBC"]:
         raise ValueError("algorithm must be AESCTR or AESCBC")
+
+    if algorithm == "AESCBC":
+        version = "4.3.0.0"
+
+    if version not in ["4.0.0.0", "4.2.0.0", "4.3.0.0"]:
+        raise ValueError("Version not supported")
 
     wrmheader = etree.Element(
         "WRMHEADER",
         nsmap={
             None: "http://schemas.microsoft.com/DRM/2007/03/PlayReadyHeader"})
-
-    if algorithm == "AESCBC":
-        wrmheader.set("version", "4.3.0.0")
-    else:
-        wrmheader.set("version", "4.2.0.0")
+    wrmheader.set("version", version)
 
     data = etree.SubElement(wrmheader, "DATA")
     protect_info = etree.SubElement(data, "PROTECTINFO")
-    kids = etree.SubElement(protect_info, "KIDS")
 
-    for key in keys:
-        if isinstance(key["key_id"], str):
-            key["key_id"] = uuid.UUID(key["key_id"])
-        elif isinstance(key["key_id"], bytes):
-            key["key_id"] = uuid.UUID(str(key["key_id"], "ASCII"))
-        kid = etree.Element("KID")
-        kid.set("ALGID", algorithm)
-        if algorithm == "AESCTR" and use_checksum:
-            kid.set("CHECKSUM", checksum(key["key_id"], key["key"]))
-        kid.set("VALUE", b64encode(key["key_id"].bytes_le))
-        kid.text = ""
-        kids.append(kid)
+    if version == "4.0.0.0":
+        if len(keys) > 1:
+            warnings.warn(
+                "Version 4.0.0.0 header selected but multiple keys provided,"
+                " only the first key will be used")
+        key = next(iter(keys))
+
+        etree.SubElement(protect_info, "KEYLEN").text = "16"
+        etree.SubElement(protect_info, "ALGID").text = "AESCTR"
+
+        key["key_id"] = _convert_key_id_to_uuid(key["key_id"])
+        kid = etree.SubElement(data, "KID")
+        kid.text = b64encode(key["key_id"].bytes_le).decode("utf-8")
+
+        cs = etree.SubElement(data, "CHECKSUM")
+        cs.text = checksum(key["key_id"], key["key"]).decode("utf-8")
+    else:
+        kids = etree.SubElement(protect_info, "KIDS")
+
+        for key in keys:
+            key["key_id"] = _convert_key_id_to_uuid(key["key_id"])
+            kid = etree.Element("KID")
+            kid.set("ALGID", algorithm)
+            if algorithm == "AESCTR" and use_checksum:
+                kid.set("CHECKSUM", checksum(key["key_id"], key["key"]))
+            kid.set("VALUE", b64encode(key["key_id"].bytes_le))
+            kid.text = ""
+            kids.append(kid)
 
     la_url = etree.SubElement(data, "LA_URL")
     la_url.text = url
