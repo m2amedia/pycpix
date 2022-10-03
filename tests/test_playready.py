@@ -1,3 +1,4 @@
+import uuid
 import pytest
 from cpix.drm import playready
 
@@ -23,6 +24,26 @@ def test_checksum():
     checksum = playready.checksum(kid, cek)
 
     assert checksum == b"Me48z71nuqY="
+
+
+def test_convert_key_id_to_uuid_from_str():
+
+    str_key_id = "8ba94ade-6eb9-449d-b44f-a5beefaf43b0"
+
+    key_id = playready._convert_key_id_to_uuid(str_key_id)
+
+    assert isinstance(key_id, uuid.UUID)
+    assert key_id == uuid.UUID("8ba94ade-6eb9-449d-b44f-a5beefaf43b0")
+
+
+def test_convert_key_id_to_uuid_from_uuid():
+
+    uuid_key_id = uuid.UUID("8ba94ade-6eb9-449d-b44f-a5beefaf43b0")
+
+    key_id = playready._convert_key_id_to_uuid(uuid_key_id)
+
+    assert isinstance(key_id, uuid.UUID)
+    assert key_id == uuid_key_id
 
 
 def test_generate_wrmheader():

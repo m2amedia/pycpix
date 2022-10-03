@@ -100,6 +100,8 @@ def _convert_key_id_to_uuid(key_id):
         return uuid.UUID(key_id)
     elif isinstance(key_id, bytes):
         return uuid.UUID(str(key_id, "ASCII"))
+    else:
+        return key_id
 
 
 def generate_wrmheader(keys, url, algorithm="AESCTR", use_checksum=True,
