@@ -36,6 +36,16 @@ def test_convert_key_id_to_uuid_from_str():
     assert key_id == uuid.UUID("8ba94ade-6eb9-449d-b44f-a5beefaf43b0")
 
 
+def test_convert_key_id_to_uuid_from_bytes():
+
+    bytes_key_id = b'8ba94ade-6eb9-449d-b44f-a5beefaf43b0'
+
+    key_id = playready._convert_key_id_to_uuid(bytes_key_id)
+
+    assert isinstance(key_id, uuid.UUID)
+    assert key_id == uuid.UUID('8ba94ade-6eb9-449d-b44f-a5beefaf43b0')
+
+
 def test_convert_key_id_to_uuid_from_uuid():
 
     uuid_key_id = uuid.UUID("8ba94ade-6eb9-449d-b44f-a5beefaf43b0")
@@ -43,7 +53,7 @@ def test_convert_key_id_to_uuid_from_uuid():
     key_id = playready._convert_key_id_to_uuid(uuid_key_id)
 
     assert isinstance(key_id, uuid.UUID)
-    assert key_id == uuid_key_id
+    assert key_id == uuid.UUID('8ba94ade-6eb9-449d-b44f-a5beefaf43b0')
 
 
 def test_generate_wrmheader():
