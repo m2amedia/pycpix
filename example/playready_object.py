@@ -9,8 +9,9 @@ PlayReady Header specification: https://docs.microsoft.com/en-us/playready/speci
 """
 import argparse
 import logging
+import cpix
 from cpix.drm import playready
-from base64 import b64encode
+from base64 import b16decode, b16encode, b64decode, b64encode
 
 
 logger = logging.getLogger()
@@ -56,10 +57,10 @@ Outputs:
         required=False,
         default=PLAYREADY_TEST_URL)
     parser.add_argument(
-        "--key_ids",
+        "--keys",
         action="store",
-        dest="key_ids",
-        help="List of Key IDs, comma separated. (e.g. --key_ids foo,bar)",
+        dest="keys",
+        help="List of kid:cek, comma separated. (e.g. --keys foo:cek1,bar:cek2). cek is optional",
         required=True)
     parser.add_argument(
         "--cbcs",
@@ -75,6 +76,21 @@ Outputs:
         required=False,
         default=1,
         type=int)
+    parser.add_argument(
+        "--wrm_version",
+        action="store",
+        dest="wrm_version",
+        help="WRM Header version, default to 4.2.0.0",
+        required=False,
+        default="4.2.0.0",
+        type=str)
+    parser.add_argument(
+        "--use_checksum",
+        action="store_true",
+        dest="use_checksum",
+        help="Include checksum in WRM Header, default is False",
+        required=False,
+        default=False)
     parser.add_argument(
         "--log_level",
         action="store",
@@ -92,9 +108,22 @@ Outputs:
     ch.setFormatter(formatter)
     logger.addHandler(ch)
 
-    key_ids = []
-    for key_id in args.key_ids.split(","):
-        key_ids.append({"key_id": key_id})
+    parsed_keys = cpix.ContentKeyList()
+
+    for key in args.keys.split(","):
+        try:
+            kid,cek = key.split(":")
+            if len(kid) != 32:
+                raise Exception("key ID must be 128-bit")
+            if len(cek) != 32:
+                raise Exception("cek must be 128-bit")
+        except ValueError:
+            if args.use_checksum: 
+                raise Exception("For --use_checksum, key must be KEY_ID:CONTENT_KEY (missing :)")
+            kid = key
+            cek= ""
+        parsed_keys.append(
+            cpix.ContentKey(kid=kid, cek=b64encode(b16decode(cek))))
 
     la_url = args.la_url
 
@@ -108,7 +137,14 @@ Outputs:
     # playready_object = playready.generate_playready_object(wrm_header)
 
     pssh = playready.generate_pssh(
-        key_ids, la_url, algorithm, False, args.pssh_version)
+        keys=[{"key_id": key.kid, "key": b16encode(
+            b64decode(key.cek))} for key in parsed_keys],
+        url=la_url,
+        algorithm=algorithm, 
+        use_checksum=args.use_checksum, 
+        version=args.pssh_version, 
+        wrm_version=args.wrm_version
+    )
 
     drm_specific_data = '--iss.drm_specific_data={}'.format(
         str(b64encode(pssh), 'ascii'))
