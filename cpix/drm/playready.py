@@ -141,9 +141,9 @@ def generate_wrmheader(keys, url, algorithm="AESCTR", use_checksum=True,
         key["key_id"] = _convert_key_id_to_uuid(key["key_id"])
         kid = etree.SubElement(data, "KID")
         kid.text = b64encode(key["key_id"].bytes_le).decode("utf-8")
-
-        cs = etree.SubElement(data, "CHECKSUM")
-        cs.text = checksum(key["key_id"], key["key"]).decode("utf-8")
+        if use_checksum: 
+            cs = etree.SubElement(data, "CHECKSUM")
+            cs.text = checksum(key["key_id"], key["key"]).decode("utf-8")
     else:
         kids = etree.SubElement(protect_info, "KIDS")
 
@@ -175,13 +175,13 @@ def generate_playready_object(wrmheader):
             wrmheader)                                      # wrmheader
 
 
-def generate_pssh(keys, url, algorithm="AESCTR", use_checksum=True, version=1):
+def generate_pssh(keys, url, algorithm="AESCTR", use_checksum=True, version=1, wrm_version="4.2.0.0"):
     """
     Generate a PSSH box including Playready header
 
     Defaults to version 1 with key IDs listed
     """
-    wrmheader = generate_wrmheader(keys, url, algorithm, use_checksum)
+    wrmheader = generate_wrmheader(keys, url, algorithm, use_checksum, wrm_version)
     pro = generate_playready_object(wrmheader)
 
     return pssh_box.build({
